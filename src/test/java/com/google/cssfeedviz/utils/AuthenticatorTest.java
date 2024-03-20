@@ -32,7 +32,7 @@ import com.google.auth.oauth2.UserAuthorizer;
 import com.google.auth.oauth2.UserCredentials;
 
 public class AuthenticatorTest {
-  
+
   private final String TEST_CONFIG_DIR = "./config/test";
   private final String INVALID_TEST_CONFIG_DIR = TEST_CONFIG_DIR + "/invalid";
   private final String SERVICE_ACCOUNT_FILE_PATH = TEST_CONFIG_DIR + "/service-account.json";
