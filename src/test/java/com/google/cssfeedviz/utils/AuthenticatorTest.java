@@ -28,8 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.auth.oauth2.UserAuthorizer;
-import com.google.auth.oauth2.UserCredentials;
 
 public class AuthenticatorTest {
 
