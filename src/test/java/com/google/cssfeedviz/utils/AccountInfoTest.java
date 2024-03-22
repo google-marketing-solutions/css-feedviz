@@ -21,7 +21,7 @@ import java.math.BigInteger;
 import org.junit.Test;
 
 public class AccountInfoTest {
-  
+
   private final String TEST_CONFIG_DIR = "./config/test";
   private final String INVALID_CONFIG_DIR = "./config/test/invalid";
   private final String FILE_NAME = "account-info.json";
@@ -31,14 +31,12 @@ public class AccountInfoTest {
   private final BigInteger TEST_DOMAIN_ID = BigInteger.valueOf(456);
   private final BigInteger TEST_MERCHANT_ID = BigInteger.valueOf(789);
 
-
-
   @Test
   public void testLoad() throws IOException {
-      AccountInfo accountInfo = AccountInfo.load(TEST_CONFIG_DIR, FILE_NAME);
-      assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
-      assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
-      assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
+    AccountInfo accountInfo = AccountInfo.load(TEST_CONFIG_DIR, FILE_NAME);
+    assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
+    assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
+    assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
   }
 
   @Test

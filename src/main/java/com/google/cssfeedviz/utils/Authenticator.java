@@ -14,11 +14,11 @@
 
 package com.google.cssfeedviz.utils;
 
+import com.google.auth.oauth2.GoogleCredentials;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import com.google.auth.oauth2.GoogleCredentials;
 
 /**
  * Class that contains all the authentication logic, both for service accounts and to create an
@@ -37,12 +37,11 @@ public class Authenticator {
   public GoogleCredentials authenticate() throws IOException {
     return authenticate(AccountInfo.load());
   }
-  
+
   public GoogleCredentials authenticate(AccountInfo accountInfo) throws IOException {
-    // AccountInfo accountInfo = AccountInfo.load();
     if (accountInfo.getPath() == null) {
-        throw new IllegalArgumentException(
-            "Must update AccountInfo.java to set a configuration directory.");
+      throw new IllegalArgumentException(
+          "Must update AccountInfo.java to set a configuration directory.");
     }
     File serviceAccountFile = new File(accountInfo.getPath(), "service-account.json");
     System.out.printf("Checking for service account file at: %s%n", serviceAccountFile);

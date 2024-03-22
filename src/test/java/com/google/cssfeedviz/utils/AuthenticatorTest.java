@@ -18,16 +18,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.when;
 
+import com.google.auth.oauth2.GoogleCredentials;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import com.google.auth.oauth2.GoogleCredentials;
 
 public class AuthenticatorTest {
 
@@ -35,11 +34,9 @@ public class AuthenticatorTest {
   private final String INVALID_TEST_CONFIG_DIR = TEST_CONFIG_DIR + "/invalid";
   private final String SERVICE_ACCOUNT_FILE_PATH = TEST_CONFIG_DIR + "/service-account.json";
 
-  @Mock
-  private AccountInfo accountInfo;
+  @Mock private AccountInfo accountInfo;
 
-  @InjectMocks
-  private Authenticator authenticator;
+  @InjectMocks private Authenticator authenticator;
 
   @Before
   public void setUp() {
@@ -51,7 +48,7 @@ public class AuthenticatorTest {
     when(accountInfo.getPath()).thenReturn(new File(TEST_CONFIG_DIR));
 
     GoogleCredentials expectedCredentials =
-      GoogleCredentials.fromStream(new FileInputStream(SERVICE_ACCOUNT_FILE_PATH));
+        GoogleCredentials.fromStream(new FileInputStream(SERVICE_ACCOUNT_FILE_PATH));
     GoogleCredentials credentials = authenticator.authenticate(accountInfo);
 
     assertEquals(expectedCredentials, credentials);
