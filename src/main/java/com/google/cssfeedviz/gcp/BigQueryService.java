@@ -24,11 +24,18 @@ import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
+import com.google.cloud.bigquery.StandardTableDefinition;
+import com.google.cloud.bigquery.Table;
+import com.google.cloud.bigquery.TableId;
+import com.google.cloud.bigquery.TableInfo;
+import com.google.cloud.bigquery.TimePartitioning;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.cssfeedviz.utils.Authenticator;
 import java.io.IOException;
 
 public class BigQueryService {
+  private final String CSS_PRODUCTS_TABLE_NAME = "css_products";
+
   private BigQuery bigQuery;
 
   public void setBigQuery(BigQuery bigQuery) {
@@ -40,9 +47,31 @@ public class BigQueryService {
     return dataset != null;
   }
 
+  public boolean tableExists(String datasetName, String tableName) {
+    Table table = this.bigQuery.getTable(TableId.of(datasetName, tableName));
+    return table != null;
+  }
+
   public Dataset createDataset(String datasetName, String location) {
     DatasetInfo datasetInfo = DatasetInfo.newBuilder(datasetName).setLocation(location).build();
     return this.bigQuery.create(datasetInfo);
+  }
+
+  public Table createCssProductsTable(String datasetName) {
+    TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
+    long ninetyDaysInMs = 7776000000L;
+    TimePartitioning timePartitioning =
+        TimePartitioning.newBuilder(TimePartitioning.Type.DAY)
+            .setField("date")
+            .setExpirationMs(ninetyDaysInMs)
+            .build();
+    StandardTableDefinition tableDefinition =
+        StandardTableDefinition.newBuilder()
+            .setSchema(getCssProductsSchema())
+            .setTimePartitioning(timePartitioning)
+            .build();
+    TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
+    return bigQuery.create(tableInfo);
   }
 
   public Field getCssProductsAttributesField() {

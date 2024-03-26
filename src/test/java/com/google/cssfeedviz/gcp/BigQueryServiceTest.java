@@ -27,6 +27,11 @@ import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
+import com.google.cloud.bigquery.StandardTableDefinition;
+import com.google.cloud.bigquery.Table;
+import com.google.cloud.bigquery.TableId;
+import com.google.cloud.bigquery.TableInfo;
+import com.google.cloud.bigquery.TimePartitioning;
 import com.google.cssfeedviz.utils.AccountInfo;
 import java.io.IOException;
 import org.junit.Before;
@@ -39,10 +44,13 @@ public class BigQueryServiceTest {
   private final String TEST_CONFIG_DIR = "./config/test";
   private final String ACCOUNT_INFO_FILE_NAME = "account-info.json";
   private final String TEST_DATASET_NAME = "TEST_DATASET";
+  private final String CSS_PRODUCTS_TABLE_NAME = "css_products";
+  private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
   private final DatasetInfo DATASET_INFO =
       DatasetInfo.newBuilder(TEST_DATASET_NAME).setLocation(TEST_LOCATION).build();
+  private final TableId TABLE_ID = TableId.of(TEST_DATASET_NAME, TEST_TABLE_NAME);
   private final Field PRICE_AMOUNT_MICROS = Field.of("amount_micros", StandardSQLTypeName.INT64);
   private final Field PRICE_CURRENCY_CODE = Field.of("currency_code", StandardSQLTypeName.STRING);
   private final Field PRODUCT_DIMENSION_VALUE = Field.of("value", StandardSQLTypeName.FLOAT64);
@@ -187,12 +195,22 @@ public class BigQueryServiceTest {
           Field.of("creation_date", StandardSQLTypeName.TIMESTAMP),
           Field.of("last_update_date", StandardSQLTypeName.TIMESTAMP),
           Field.of("google_expiration_date", StandardSQLTypeName.TIMESTAMP));
+  private final Schema CSS_PRODUCTS_SCHEMA =
+      Schema.of(
+          Field.of("date", StandardSQLTypeName.DATE),
+          Field.of("name", StandardSQLTypeName.STRING),
+          Field.of("raw_provided_id", StandardSQLTypeName.STRING),
+          Field.of("content_language", StandardSQLTypeName.STRING),
+          Field.of("feed_label", StandardSQLTypeName.STRING),
+          CSS_PRODUCTS_ATTRIBUTES_FIELD,
+          CSS_PRODUCTS_CSS_PRODUCT_STATUS_FIELD);
 
   private AccountInfo accountInfo;
   private BigQueryService bigQueryService;
 
   @Mock private BigQuery bigQuery;
   @Mock private Dataset dataset;
+  @Mock private Table table;
 
   @Before
   public void setUp() throws IOException {
@@ -203,13 +221,13 @@ public class BigQueryServiceTest {
   }
 
   @Test
-  public void datasetExists_datasetExists() throws IOException {
+  public void datasetExists_datasetExists() {
     when(bigQuery.getDataset(DATASET_ID)).thenReturn(dataset);
     assertTrue(bigQueryService.datasetExists(TEST_DATASET_NAME));
   }
 
   @Test
-  public void datasetExists_datasetDoesNotExist() throws IOException {
+  public void datasetExists_datasetDoesNotExist() {
     when(bigQuery.getDataset(DATASET_ID)).thenReturn(null);
     assertFalse(bigQueryService.datasetExists(TEST_DATASET_NAME));
   }
@@ -233,17 +251,39 @@ public class BigQueryServiceTest {
   }
 
   @Test
-  public void getProductsSchema() {
-    Schema schema =
-        Schema.of(
-            Field.of("date", StandardSQLTypeName.DATE),
-            Field.of("name", StandardSQLTypeName.STRING),
-            Field.of("raw_provided_id", StandardSQLTypeName.STRING),
-            Field.of("content_language", StandardSQLTypeName.STRING),
-            Field.of("feed_label", StandardSQLTypeName.STRING),
-            CSS_PRODUCTS_ATTRIBUTES_FIELD,
-            CSS_PRODUCTS_CSS_PRODUCT_STATUS_FIELD);
+  public void getCssProductsSchema() {
+    assertEquals(CSS_PRODUCTS_SCHEMA, bigQueryService.getCssProductsSchema());
+  }
 
-    assertEquals(schema, bigQueryService.getCssProductsSchema());
+  @Test
+  public void tableExists_tableExists() {
+    when(bigQuery.getTable(TABLE_ID)).thenReturn(table);
+    assertTrue(bigQueryService.tableExists(TEST_DATASET_NAME, TEST_TABLE_NAME));
+  }
+
+  @Test
+  public void tableExists_tableDoesNotExist() {
+    when(bigQuery.getTable(TABLE_ID)).thenReturn(null);
+    assertFalse(bigQueryService.tableExists(TEST_DATASET_NAME, TEST_TABLE_NAME));
+  }
+
+  @Test
+  public void createCssProductsTable() {
+    TableId tableId = TableId.of(TEST_DATASET_NAME, CSS_PRODUCTS_TABLE_NAME);
+    long ninetyDaysInMs = 7776000000L;
+    TimePartitioning timePartitioning =
+        TimePartitioning.newBuilder(TimePartitioning.Type.DAY)
+            .setField("date")
+            .setExpirationMs(ninetyDaysInMs)
+            .build();
+    StandardTableDefinition tableDefinition =
+        StandardTableDefinition.newBuilder()
+            .setSchema(CSS_PRODUCTS_SCHEMA)
+            .setTimePartitioning(timePartitioning)
+            .build();
+    TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
+
+    when(bigQuery.create(tableInfo)).thenReturn(table);
+    assertEquals(table, bigQueryService.createCssProductsTable(TEST_DATASET_NAME));
   }
 }
