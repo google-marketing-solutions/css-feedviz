@@ -25,6 +25,7 @@ import com.google.cloud.bigquery.DatasetId;
 import com.google.cloud.bigquery.DatasetInfo;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
+import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.cloud.bigquery.StandardTableDefinition;
@@ -33,7 +34,14 @@ import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
 import com.google.cssfeedviz.utils.AccountInfo;
+import com.google.shopping.css.v1.Attributes;
+import com.google.shopping.css.v1.CssProduct;
+import com.google.shopping.css.v1.CssProductStatus;
+import com.google.shopping.css.v1.CssProductStatus.ItemLevelIssue;
 import java.io.IOException;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -47,6 +55,8 @@ public class BigQueryServiceTest {
   private final String CSS_PRODUCTS_TABLE_NAME = "css_products";
   private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
+  private final String PRODUCT_NAME = "Test Product Name";
+  private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
   private final DatasetInfo DATASET_INFO =
       DatasetInfo.newBuilder(TEST_DATASET_NAME).setLocation(TEST_LOCATION).build();
@@ -204,6 +214,18 @@ public class BigQueryServiceTest {
           Field.of("feed_label", StandardSQLTypeName.STRING),
           CSS_PRODUCTS_ATTRIBUTES_FIELD,
           CSS_PRODUCTS_CSS_PRODUCT_STATUS_FIELD);
+  private final Map<String, String> TEST_PRICE_MAP =
+      Map.of(
+          "amount_micros",
+          String.valueOf(CSS_PRODUCT.getAttributes().getLowPrice().getAmountMicros()),
+          "currency_code",
+          CSS_PRODUCT.getAttributes().getLowPrice().getCurrencyCode());
+  private final Map<String, Object> TEST_PRODUCT_DIMENSION_MAP =
+      Map.of(
+          "value",
+          CSS_PRODUCT.getAttributes().getProductHeight().getValue(),
+          "unit",
+          CSS_PRODUCT.getAttributes().getProductHeight().getUnit());
 
   private AccountInfo accountInfo;
   private BigQueryService bigQueryService;
@@ -285,5 +307,118 @@ public class BigQueryServiceTest {
 
     when(bigQuery.create(tableInfo)).thenReturn(table);
     assertEquals(table, bigQueryService.createCssProductsTable(TEST_DATASET_NAME));
+  }
+
+  @Test
+  public void getPriceAsMap() {
+    assertEquals(
+        TEST_PRICE_MAP, bigQueryService.getPriceAsMap(CSS_PRODUCT.getAttributes().getLowPrice()));
+  }
+
+  @Test
+  public void getProductDimensionAsMap() {
+    assertEquals(
+        TEST_PRODUCT_DIMENSION_MAP,
+        bigQueryService.getProductDimensionAsMap(CSS_PRODUCT.getAttributes().getProductHeight()));
+  }
+
+  @Test
+  public void getItemLevelIssueAsMap() {
+    String testDescription = "Test Description";
+    ItemLevelIssue itemLevelIssue =
+        ItemLevelIssue.newBuilder().setDescription(testDescription).build();
+    Map<String, Object> itemLevelIssueMap = new HashMap<String, Object>();
+    itemLevelIssueMap.put("code", itemLevelIssue.getCode());
+    itemLevelIssueMap.put("servability", itemLevelIssue.getServability());
+    itemLevelIssueMap.put("resolution", itemLevelIssue.getResolution());
+    itemLevelIssueMap.put("attribute", itemLevelIssue.getAttribute());
+    itemLevelIssueMap.put("destination", itemLevelIssue.getDestination());
+    itemLevelIssueMap.put("description", itemLevelIssue.getDescription());
+    itemLevelIssueMap.put("detail", itemLevelIssue.getDetail());
+    itemLevelIssueMap.put("documentation", itemLevelIssue.getDocumentation());
+    itemLevelIssueMap.put("applicable_countries", itemLevelIssue.getApplicableCountriesList());
+
+    assertEquals(itemLevelIssueMap, bigQueryService.getItemLevelIssueAsMap(itemLevelIssue));
+  }
+
+  @Test
+  public void getCssProductAsRowToInsert() {
+    Attributes cssProductAttributes = CSS_PRODUCT.getAttributes();
+
+    Map<String, Object> testAttributes = new HashMap<String, Object>();
+    testAttributes.put("low_price", TEST_PRICE_MAP);
+    testAttributes.put("high_price", TEST_PRICE_MAP);
+    testAttributes.put("headline_offer_price", TEST_PRICE_MAP);
+    testAttributes.put("headline_offer_shipping_price", TEST_PRICE_MAP);
+    testAttributes.put(
+        "additional_image_links", cssProductAttributes.getAdditionalImageLinksList());
+    testAttributes.put("product_types", cssProductAttributes.getProductTypesList());
+    testAttributes.put("size_types", cssProductAttributes.getSizeTypesList());
+    testAttributes.put("product_details", cssProductAttributes.getProductDetailsList());
+    testAttributes.put("product_weight", TEST_PRODUCT_DIMENSION_MAP);
+    testAttributes.put("product_width", TEST_PRODUCT_DIMENSION_MAP);
+    testAttributes.put("product_height", TEST_PRODUCT_DIMENSION_MAP);
+    testAttributes.put("product_length", TEST_PRODUCT_DIMENSION_MAP);
+    testAttributes.put("product_highlights", cssProductAttributes.getProductHighlightsList());
+    testAttributes.put("certifications", cssProductAttributes.getCertificationsList());
+    testAttributes.put("expiration_date", cssProductAttributes.getExpirationDate());
+    testAttributes.put("included_destinations", cssProductAttributes.getIncludedDestinationsList());
+    testAttributes.put("excluded_destinations", cssProductAttributes.getExcludedDestinationsList());
+    testAttributes.put("cpp_link", cssProductAttributes.getCppLink());
+    testAttributes.put("cpp_mobile_link", cssProductAttributes.getCppMobileLink());
+    testAttributes.put("cpp_ads_redirect", cssProductAttributes.getCppAdsRedirect());
+    testAttributes.put("number_of_offers", cssProductAttributes.getNumberOfOffers());
+    testAttributes.put(
+        "headline_offer_condition", cssProductAttributes.getHeadlineOfferCondition());
+    testAttributes.put("headline_offer_link", cssProductAttributes.getHeadlineOfferLink());
+    testAttributes.put(
+        "headline_offer_mobile_link", cssProductAttributes.getHeadlineOfferMobileLink());
+    testAttributes.put("title", cssProductAttributes.getTitle());
+    testAttributes.put("image_link", cssProductAttributes.getImageLink());
+    testAttributes.put("description", cssProductAttributes.getDescription());
+    testAttributes.put("brand", cssProductAttributes.getBrand());
+    testAttributes.put("mpn", cssProductAttributes.getMpn());
+    testAttributes.put("gtin", cssProductAttributes.getGtin());
+    testAttributes.put("google_product_category", cssProductAttributes.getGoogleProductCategory());
+    testAttributes.put("adult", cssProductAttributes.getAdult());
+    testAttributes.put("multipack", cssProductAttributes.getMultipack());
+    testAttributes.put("is_bundle", cssProductAttributes.getIsBundle());
+    testAttributes.put("age_group", cssProductAttributes.getAgeGroup());
+    testAttributes.put("color", cssProductAttributes.getColor());
+    testAttributes.put("gender", cssProductAttributes.getGender());
+    testAttributes.put("material", cssProductAttributes.getMaterial());
+    testAttributes.put("pattern", cssProductAttributes.getPattern());
+    testAttributes.put("size", cssProductAttributes.getSize());
+    testAttributes.put("size_system", cssProductAttributes.getSizeSystem());
+    testAttributes.put("item_group_id", cssProductAttributes.getItemGroupId());
+    testAttributes.put("pause", cssProductAttributes.getPause());
+    testAttributes.put("custom_label_0", cssProductAttributes.getCustomLabel0());
+    testAttributes.put("custom_label_1", cssProductAttributes.getCustomLabel1());
+    testAttributes.put("custom_label_2", cssProductAttributes.getCustomLabel2());
+    testAttributes.put("custom_label_3", cssProductAttributes.getCustomLabel3());
+    testAttributes.put("custom_label_4", cssProductAttributes.getCustomLabel4());
+
+    CssProductStatus cssProductStatus = CSS_PRODUCT.getCssProductStatus();
+    Map<String, Object> testProductStatus = new HashMap<String, Object>();
+    testProductStatus.put("destination_statuses", cssProductStatus.getDestinationStatusesList());
+    testProductStatus.put("item_level_issues", cssProductStatus.getItemLevelIssuesList());
+    testProductStatus.put("creation_date", cssProductStatus.getCreationDate());
+    testProductStatus.put("last_update_date", cssProductStatus.getLastUpdateDate());
+    testProductStatus.put("google_expiration_date", cssProductStatus.getGoogleExpirationDate());
+
+    Date date = new Date();
+    Map<String, Object> testRowContent = new HashMap<String, Object>();
+    testRowContent.put("date", date);
+    testRowContent.put("name", CSS_PRODUCT.getName());
+    testRowContent.put("raw_provided_id", CSS_PRODUCT.getRawProvidedId());
+    testRowContent.put("content_language", CSS_PRODUCT.getContentLanguage());
+    testRowContent.put("feed_label", CSS_PRODUCT.getFeedLabel());
+    testRowContent.put("attributes", testAttributes);
+    testRowContent.put("css_product_status", testProductStatus);
+
+    RowToInsert rowToInsert = RowToInsert.of(testRowContent);
+    assertEquals(
+        rowToInsert.toString(),
+        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, date).toString());
   }
 }
