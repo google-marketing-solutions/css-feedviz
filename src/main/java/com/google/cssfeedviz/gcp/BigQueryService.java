@@ -22,7 +22,9 @@ import com.google.cloud.bigquery.DatasetId;
 import com.google.cloud.bigquery.DatasetInfo;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
+import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
+import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.cloud.bigquery.StandardTableDefinition;
@@ -386,6 +388,16 @@ public class BigQueryService {
         Field.of("feed_label", StandardSQLTypeName.STRING),
         getCssProductsAttributesField(),
         getCssProductsCssProductStatusField());
+  }
+
+  public InsertAllResponse insertCssProducts(
+      String datasetName, Iterable<CssProduct> cssProducts, Date date) {
+    TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
+    InsertAllRequest.Builder insertAllRequestBuilder = InsertAllRequest.newBuilder(tableId);
+    for (CssProduct cssProduct : cssProducts) {
+      insertAllRequestBuilder.addRow(getCssProductAsRowToInsert(cssProduct, date));
+    }
+    return bigQuery.insertAll(insertAllRequestBuilder.build());
   }
 
   public BigQueryService(AccountInfo accountInfo) throws IOException {

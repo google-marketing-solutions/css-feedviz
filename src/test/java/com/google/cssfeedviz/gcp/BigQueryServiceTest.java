@@ -25,7 +25,9 @@ import com.google.cloud.bigquery.DatasetId;
 import com.google.cloud.bigquery.DatasetInfo;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
+import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
+import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.cloud.bigquery.StandardTableDefinition;
@@ -41,6 +43,7 @@ import com.google.shopping.css.v1.CssProductStatus.ItemLevelIssue;
 import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,6 +59,7 @@ public class BigQueryServiceTest {
   private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
   private final String PRODUCT_NAME = "Test Product Name";
+  private final Date TEST_DATE = new Date();
   private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
   private final DatasetInfo DATASET_INFO =
@@ -233,6 +237,7 @@ public class BigQueryServiceTest {
   @Mock private BigQuery bigQuery;
   @Mock private Dataset dataset;
   @Mock private Table table;
+  @Mock private InsertAllResponse insertAllResponse;
 
   @Before
   public void setUp() throws IOException {
@@ -406,9 +411,8 @@ public class BigQueryServiceTest {
     testProductStatus.put("last_update_date", cssProductStatus.getLastUpdateDate());
     testProductStatus.put("google_expiration_date", cssProductStatus.getGoogleExpirationDate());
 
-    Date date = new Date();
     Map<String, Object> testRowContent = new HashMap<String, Object>();
-    testRowContent.put("date", date);
+    testRowContent.put("date", TEST_DATE);
     testRowContent.put("name", CSS_PRODUCT.getName());
     testRowContent.put("raw_provided_id", CSS_PRODUCT.getRawProvidedId());
     testRowContent.put("content_language", CSS_PRODUCT.getContentLanguage());
@@ -419,6 +423,21 @@ public class BigQueryServiceTest {
     RowToInsert rowToInsert = RowToInsert.of(testRowContent);
     assertEquals(
         rowToInsert.toString(),
-        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, date).toString());
+        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_DATE).toString());
+  }
+
+  @Test
+  public void insertCssProducts() {
+    Iterable<CssProduct> cssProducts = List.of(CSS_PRODUCT);
+
+    TableId tableId = TableId.of(TEST_DATASET_NAME, CSS_PRODUCTS_TABLE_NAME);
+    RowToInsert rowToInsert = bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_DATE);
+    InsertAllRequest insertAllRequest =
+        InsertAllRequest.newBuilder(tableId).addRow(rowToInsert).build();
+    when(bigQuery.insertAll(insertAllRequest)).thenReturn(insertAllResponse);
+
+    assertEquals(
+        insertAllResponse,
+        bigQueryService.insertCssProducts(TEST_DATASET_NAME, cssProducts, TEST_DATE));
   }
 }
