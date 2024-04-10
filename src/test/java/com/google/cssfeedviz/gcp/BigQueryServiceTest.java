@@ -434,10 +434,14 @@ public class BigQueryServiceTest {
     RowToInsert rowToInsert = bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_DATE);
     InsertAllRequest insertAllRequest =
         InsertAllRequest.newBuilder(tableId).addRow(rowToInsert).build();
+
+    when(bigQuery.getDataset(DATASET_ID)).thenReturn(dataset);
+    when(bigQuery.getTable(tableId)).thenReturn(table);
     when(bigQuery.insertAll(insertAllRequest)).thenReturn(insertAllResponse);
 
     assertEquals(
         insertAllResponse,
-        bigQueryService.insertCssProducts(TEST_DATASET_NAME, cssProducts, TEST_DATE));
+        bigQueryService.insertCssProducts(
+            TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_DATE));
   }
 }

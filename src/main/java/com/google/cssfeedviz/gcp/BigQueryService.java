@@ -391,7 +391,10 @@ public class BigQueryService {
   }
 
   public InsertAllResponse insertCssProducts(
-      String datasetName, Iterable<CssProduct> cssProducts, Date date) {
+      String datasetName, String datasetLocation, Iterable<CssProduct> cssProducts, Date date) {
+    if (!datasetExists(datasetName)) createDataset(datasetName, datasetLocation);
+    if (!tableExists(datasetName, CSS_PRODUCTS_TABLE_NAME)) createCssProductsTable(datasetName);
+
     TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
     InsertAllRequest.Builder insertAllRequestBuilder = InsertAllRequest.newBuilder(tableId);
     for (CssProduct cssProduct : cssProducts) {
