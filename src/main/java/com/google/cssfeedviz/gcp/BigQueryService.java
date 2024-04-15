@@ -42,7 +42,7 @@ import com.google.shopping.css.v1.ProductDimension;
 import com.google.shopping.css.v1.ProductWeight;
 import com.google.shopping.type.Price;
 import java.io.IOException;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +113,7 @@ public class BigQueryService {
     return itemLevelIssueMap;
   }
 
-  public RowToInsert getCssProductAsRowToInsert(CssProduct cssProduct, Date date) {
+  public RowToInsert getCssProductAsRowToInsert(CssProduct cssProduct, LocalDate date) {
     Attributes cssProductAttributes = cssProduct.getAttributes();
 
     List<Map<String, String>> productDetailsList =
@@ -391,7 +391,10 @@ public class BigQueryService {
   }
 
   public InsertAllResponse insertCssProducts(
-      String datasetName, String datasetLocation, Iterable<CssProduct> cssProducts, Date date) {
+      String datasetName,
+      String datasetLocation,
+      Iterable<CssProduct> cssProducts,
+      LocalDate date) {
     if (!datasetExists(datasetName)) createDataset(datasetName, datasetLocation);
     if (!tableExists(datasetName, CSS_PRODUCTS_TABLE_NAME)) createCssProductsTable(datasetName);
 

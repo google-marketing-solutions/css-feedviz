@@ -41,7 +41,7 @@ import com.google.shopping.css.v1.CssProduct;
 import com.google.shopping.css.v1.CssProductStatus;
 import com.google.shopping.css.v1.CssProductStatus.ItemLevelIssue;
 import java.io.IOException;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +59,7 @@ public class BigQueryServiceTest {
   private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
   private final String PRODUCT_NAME = "Test Product Name";
-  private final Date TEST_DATE = new Date();
+  private final LocalDate TEST_DATE = LocalDate.now();
   private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
   private final DatasetInfo DATASET_INFO =
