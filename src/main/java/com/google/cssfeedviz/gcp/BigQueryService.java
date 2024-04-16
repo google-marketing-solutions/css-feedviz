@@ -34,6 +34,8 @@ import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.cssfeedviz.utils.Authenticator;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.util.Timestamps;
 import com.google.shopping.css.v1.Attributes;
 import com.google.shopping.css.v1.CssProduct;
 import com.google.shopping.css.v1.CssProductStatus;
@@ -99,6 +101,13 @@ public class BigQueryService {
     return Map.of("value", productDimension.getValue(), "unit", productDimension.getUnit());
   }
 
+  public String getTimestampAsString(Timestamp timestamp) {
+    if (timestamp == Timestamp.getDefaultInstance()) {
+      return null;
+    }
+    return Timestamps.toString(timestamp);
+  }
+
   public Map<String, Object> getItemLevelIssueAsMap(ItemLevelIssue itemLevelIssue) {
     Map<String, Object> itemLevelIssueMap = new HashMap<String, Object>();
     itemLevelIssueMap.put("code", itemLevelIssue.getCode());
@@ -162,7 +171,8 @@ public class BigQueryService {
         "product_length", getProductDimensionAsMap(cssProductAttributes.getProductLength()));
     attributesMap.put("product_highlights", cssProductAttributes.getProductHighlightsList());
     attributesMap.put("certifications", certificationsList);
-    attributesMap.put("expiration_date", String.valueOf(cssProductAttributes.getExpirationDate()));
+    attributesMap.put(
+        "expiration_date", getTimestampAsString(cssProductAttributes.getExpirationDate()));
     attributesMap.put("included_destinations", cssProductAttributes.getIncludedDestinationsList());
     attributesMap.put("excluded_destinations", cssProductAttributes.getExcludedDestinationsList());
     attributesMap.put("cpp_link", cssProductAttributes.getCppLink());
@@ -218,12 +228,15 @@ public class BigQueryService {
     Map<String, Object> cssProductStatusMap = new HashMap<String, Object>();
     cssProductStatusMap.put("destination_statuses", destinationStatusList);
     cssProductStatusMap.put("item_level_issues", itemLevelIssueList);
-    cssProductStatusMap.put("creation_date", cssProductStatus.getCreationDate());
-    cssProductStatusMap.put("last_update_date", cssProductStatus.getLastUpdateDate());
-    cssProductStatusMap.put("google_expiration_date", cssProductStatus.getGoogleExpirationDate());
+    cssProductStatusMap.put(
+        "creation_date", getTimestampAsString(cssProductStatus.getCreationDate()));
+    cssProductStatusMap.put(
+        "last_update_date", getTimestampAsString(cssProductStatus.getLastUpdateDate()));
+    cssProductStatusMap.put(
+        "google_expiration_date", getTimestampAsString(cssProductStatus.getGoogleExpirationDate()));
 
     Map<String, Object> rowContent = new HashMap<String, Object>();
-    rowContent.put("date", date);
+    rowContent.put("date", date.toString());
     rowContent.put("name", cssProduct.getName());
     rowContent.put("raw_provided_id", cssProduct.getRawProvidedId());
     rowContent.put("content_language", cssProduct.getContentLanguage());

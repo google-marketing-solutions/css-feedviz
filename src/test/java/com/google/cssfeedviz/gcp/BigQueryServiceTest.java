@@ -36,6 +36,8 @@ import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
 import com.google.cssfeedviz.utils.AccountInfo;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.util.Timestamps;
 import com.google.shopping.css.v1.Attributes;
 import com.google.shopping.css.v1.CssProduct;
 import com.google.shopping.css.v1.CssProductStatus;
@@ -347,6 +349,20 @@ public class BigQueryServiceTest {
   }
 
   @Test
+  public void getTimestampAsString_returnsTimestampString() {
+    long secondsSinceEpoch = TEST_DATE.toEpochDay() * 86400;
+    Timestamp timestamp = Timestamp.newBuilder().setSeconds(secondsSinceEpoch).build();
+    String timestampString = Timestamps.toString(timestamp);
+
+    assertEquals(timestampString, bigQueryService.getTimestampAsString(timestamp));
+  }
+
+  @Test
+  public void getTimestampAsString_defaultTimestampInstance_returnsNull() {
+    assertEquals(null, bigQueryService.getTimestampAsString(Timestamp.getDefaultInstance()));
+  }
+
+  @Test
   public void getCssProductAsRowToInsert() {
     Attributes cssProductAttributes = CSS_PRODUCT.getAttributes();
 
@@ -366,7 +382,9 @@ public class BigQueryServiceTest {
     testAttributes.put("product_length", TEST_PRODUCT_DIMENSION_MAP);
     testAttributes.put("product_highlights", cssProductAttributes.getProductHighlightsList());
     testAttributes.put("certifications", cssProductAttributes.getCertificationsList());
-    testAttributes.put("expiration_date", cssProductAttributes.getExpirationDate());
+    testAttributes.put(
+        "expiration_date",
+        bigQueryService.getTimestampAsString(cssProductAttributes.getExpirationDate()));
     testAttributes.put("included_destinations", cssProductAttributes.getIncludedDestinationsList());
     testAttributes.put("excluded_destinations", cssProductAttributes.getExcludedDestinationsList());
     testAttributes.put("cpp_link", cssProductAttributes.getCppLink());
@@ -407,9 +425,14 @@ public class BigQueryServiceTest {
     Map<String, Object> testProductStatus = new HashMap<String, Object>();
     testProductStatus.put("destination_statuses", cssProductStatus.getDestinationStatusesList());
     testProductStatus.put("item_level_issues", cssProductStatus.getItemLevelIssuesList());
-    testProductStatus.put("creation_date", cssProductStatus.getCreationDate());
-    testProductStatus.put("last_update_date", cssProductStatus.getLastUpdateDate());
-    testProductStatus.put("google_expiration_date", cssProductStatus.getGoogleExpirationDate());
+    testProductStatus.put(
+        "creation_date", bigQueryService.getTimestampAsString(cssProductStatus.getCreationDate()));
+    testProductStatus.put(
+        "last_update_date",
+        bigQueryService.getTimestampAsString(cssProductStatus.getLastUpdateDate()));
+    testProductStatus.put(
+        "google_expiration_date",
+        bigQueryService.getTimestampAsString(cssProductStatus.getGoogleExpirationDate()));
 
     Map<String, Object> testRowContent = new HashMap<String, Object>();
     testRowContent.put("date", TEST_DATE);
