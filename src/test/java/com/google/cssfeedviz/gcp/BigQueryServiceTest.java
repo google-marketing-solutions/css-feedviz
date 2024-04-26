@@ -43,7 +43,8 @@ import com.google.shopping.css.v1.CssProduct;
 import com.google.shopping.css.v1.CssProductStatus;
 import com.google.shopping.css.v1.CssProductStatus.ItemLevelIssue;
 import java.io.IOException;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,7 @@ public class BigQueryServiceTest {
   private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
   private final String PRODUCT_NAME = "Test Product Name";
-  private final LocalDate TEST_DATE = LocalDate.now();
+  private final LocalDateTime TEST_TRANSFER_DATE = LocalDateTime.now();
   private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
   private final DatasetInfo DATASET_INFO =
@@ -213,7 +214,7 @@ public class BigQueryServiceTest {
           Field.of("google_expiration_date", StandardSQLTypeName.TIMESTAMP));
   private final Schema CSS_PRODUCTS_SCHEMA =
       Schema.of(
-          Field.of("date", StandardSQLTypeName.DATE),
+          Field.of("transfer_date", StandardSQLTypeName.TIMESTAMP),
           Field.of("name", StandardSQLTypeName.STRING),
           Field.of("raw_provided_id", StandardSQLTypeName.STRING),
           Field.of("content_language", StandardSQLTypeName.STRING),
@@ -299,11 +300,11 @@ public class BigQueryServiceTest {
   @Test
   public void createCssProductsTable() {
     TableId tableId = TableId.of(TEST_DATASET_NAME, CSS_PRODUCTS_TABLE_NAME);
-    long ninetyDaysInMs = 7776000000L;
+    long thirtyDaysInMs = 2592000000L;
     TimePartitioning timePartitioning =
-        TimePartitioning.newBuilder(TimePartitioning.Type.DAY)
-            .setField("date")
-            .setExpirationMs(ninetyDaysInMs)
+        TimePartitioning.newBuilder(TimePartitioning.Type.HOUR)
+            .setField("transfer_date")
+            .setExpirationMs(thirtyDaysInMs)
             .build();
     StandardTableDefinition tableDefinition =
         StandardTableDefinition.newBuilder()
@@ -350,7 +351,7 @@ public class BigQueryServiceTest {
 
   @Test
   public void getTimestampAsString_returnsTimestampString() {
-    long secondsSinceEpoch = TEST_DATE.toEpochDay() * 86400;
+    long secondsSinceEpoch = TEST_TRANSFER_DATE.atZone(ZoneId.systemDefault()).toEpochSecond();
     Timestamp timestamp = Timestamp.newBuilder().setSeconds(secondsSinceEpoch).build();
     String timestampString = Timestamps.toString(timestamp);
 
@@ -435,7 +436,7 @@ public class BigQueryServiceTest {
         bigQueryService.getTimestampAsString(cssProductStatus.getGoogleExpirationDate()));
 
     Map<String, Object> testRowContent = new HashMap<String, Object>();
-    testRowContent.put("date", TEST_DATE);
+    testRowContent.put("transfer_date", TEST_TRANSFER_DATE);
     testRowContent.put("name", CSS_PRODUCT.getName());
     testRowContent.put("raw_provided_id", CSS_PRODUCT.getRawProvidedId());
     testRowContent.put("content_language", CSS_PRODUCT.getContentLanguage());
@@ -446,7 +447,7 @@ public class BigQueryServiceTest {
     RowToInsert rowToInsert = RowToInsert.of(testRowContent);
     assertEquals(
         rowToInsert.toString(),
-        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_DATE).toString());
+        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_TRANSFER_DATE).toString());
   }
 
   @Test
@@ -454,7 +455,8 @@ public class BigQueryServiceTest {
     Iterable<CssProduct> cssProducts = List.of(CSS_PRODUCT);
 
     TableId tableId = TableId.of(TEST_DATASET_NAME, CSS_PRODUCTS_TABLE_NAME);
-    RowToInsert rowToInsert = bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_DATE);
+    RowToInsert rowToInsert =
+        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_TRANSFER_DATE);
     InsertAllRequest insertAllRequest =
         InsertAllRequest.newBuilder(tableId).addRow(rowToInsert).build();
 
@@ -465,6 +467,6 @@ public class BigQueryServiceTest {
     assertEquals(
         insertAllResponse,
         bigQueryService.insertCssProducts(
-            TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_DATE));
+            TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE));
   }
 }

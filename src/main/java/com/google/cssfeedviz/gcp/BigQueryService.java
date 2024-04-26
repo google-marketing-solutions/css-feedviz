@@ -44,7 +44,7 @@ import com.google.shopping.css.v1.ProductDimension;
 import com.google.shopping.css.v1.ProductWeight;
 import com.google.shopping.type.Price;
 import java.io.IOException;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,11 +76,11 @@ public class BigQueryService {
 
   public Table createCssProductsTable(String datasetName) {
     TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
-    long ninetyDaysInMs = 7776000000L;
+    long thirtyDaysInMs = 2592000000L;
     TimePartitioning timePartitioning =
-        TimePartitioning.newBuilder(TimePartitioning.Type.DAY)
-            .setField("date")
-            .setExpirationMs(ninetyDaysInMs)
+        TimePartitioning.newBuilder(TimePartitioning.Type.HOUR)
+            .setField("transfer_date")
+            .setExpirationMs(thirtyDaysInMs)
             .build();
     StandardTableDefinition tableDefinition =
         StandardTableDefinition.newBuilder()
@@ -122,7 +122,7 @@ public class BigQueryService {
     return itemLevelIssueMap;
   }
 
-  public RowToInsert getCssProductAsRowToInsert(CssProduct cssProduct, LocalDate date) {
+  public RowToInsert getCssProductAsRowToInsert(CssProduct cssProduct, LocalDateTime transferDate) {
     Attributes cssProductAttributes = cssProduct.getAttributes();
 
     List<Map<String, String>> productDetailsList =
@@ -236,7 +236,7 @@ public class BigQueryService {
         "google_expiration_date", getTimestampAsString(cssProductStatus.getGoogleExpirationDate()));
 
     Map<String, Object> rowContent = new HashMap<String, Object>();
-    rowContent.put("date", date.toString());
+    rowContent.put("transfer_date", transferDate.toString());
     rowContent.put("name", cssProduct.getName());
     rowContent.put("raw_provided_id", cssProduct.getRawProvidedId());
     rowContent.put("content_language", cssProduct.getContentLanguage());
@@ -394,7 +394,7 @@ public class BigQueryService {
 
   public Schema getCssProductsSchema() {
     return Schema.of(
-        Field.of("date", StandardSQLTypeName.DATE),
+        Field.of("transfer_date", StandardSQLTypeName.TIMESTAMP),
         Field.of("name", StandardSQLTypeName.STRING),
         Field.of("raw_provided_id", StandardSQLTypeName.STRING),
         Field.of("content_language", StandardSQLTypeName.STRING),
@@ -407,14 +407,14 @@ public class BigQueryService {
       String datasetName,
       String datasetLocation,
       Iterable<CssProduct> cssProducts,
-      LocalDate date) {
+      LocalDateTime transferDate) {
     if (!datasetExists(datasetName)) createDataset(datasetName, datasetLocation);
     if (!tableExists(datasetName, CSS_PRODUCTS_TABLE_NAME)) createCssProductsTable(datasetName);
 
     TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
     InsertAllRequest.Builder insertAllRequestBuilder = InsertAllRequest.newBuilder(tableId);
     for (CssProduct cssProduct : cssProducts) {
-      insertAllRequestBuilder.addRow(getCssProductAsRowToInsert(cssProduct, date));
+      insertAllRequestBuilder.addRow(getCssProductAsRowToInsert(cssProduct, transferDate));
     }
     return bigQuery.insertAll(insertAllRequestBuilder.build());
   }
