@@ -76,7 +76,7 @@ Once properly configured, you should have a dashboard with two populated pages, 
 The TransferCssProducts service supports the following Java system properties to allow for greater customisation of functionality.
 
 | System property | Default value | Description |
-| --- | --- | --- |
+| :--- | :--- | :--- |
 | feedviz.config.dir | `"./config"` | Path to directory containing configuration files |
 | feedviz.account.info.file | `"account-info.json"` | Name of file containing CSS Center account details. |
 | feedviz.dataset.name | `"css_feedviz"` | Name of the dataset that will be used/created in BigQuery. |
