@@ -17,16 +17,22 @@ package com.google.cssfeedviz.gcp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.api.core.SettableApiFuture;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.Dataset;
 import com.google.cloud.bigquery.DatasetId;
 import com.google.cloud.bigquery.DatasetInfo;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
-import com.google.cloud.bigquery.InsertAllRequest;
-import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
 import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
@@ -35,7 +41,14 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
+import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
+import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
+import com.google.cloud.bigquery.storage.v1.CreateWriteStreamRequest;
+import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
+import com.google.cloud.bigquery.storage.v1.TableSchema;
+import com.google.cloud.bigquery.storage.v1.WriteStream;
 import com.google.cssfeedviz.utils.AccountInfo;
+import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.Timestamps;
 import com.google.shopping.css.v1.Attributes;
@@ -45,12 +58,18 @@ import com.google.shopping.css.v1.CssProductStatus.ItemLevelIssue;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import org.json.JSONArray;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 public class BigQueryServiceTest {
@@ -62,6 +81,10 @@ public class BigQueryServiceTest {
   private final String TEST_TABLE_NAME = "css_products";
   private final String TEST_LOCATION = "EU";
   private final String PRODUCT_NAME = "Test Product Name";
+  private final String WRITE_STREAM_NAME =
+      String.format(
+          "projects/google.com:test-project/datasets/%1$s/tables/%2$s/streams/TEST_STREAM",
+          TEST_DATASET_NAME, TEST_TABLE_NAME);
   private final LocalDateTime TEST_TRANSFER_DATE = LocalDateTime.now();
   private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
@@ -236,36 +259,80 @@ public class BigQueryServiceTest {
 
   private AccountInfo accountInfo;
   private BigQueryService bigQueryService;
+  private MockedStatic<BigQueryWriteClient> mockedStaticBigQueryWriteClient;
+  private MockedStatic<JsonStreamWriter> mockedStaticJsonStreamWriter;
+  private BigQueryWriteClient mockBigQueryWriteClient;
+  private JsonStreamWriter mockJsonStreamWriter;
+  private WriteStream mockWriteStream;
 
-  @Mock private BigQuery bigQuery;
-  @Mock private Dataset dataset;
-  @Mock private Table table;
-  @Mock private InsertAllResponse insertAllResponse;
+  @Mock private BigQuery mockBigQuery;
+  @Mock private Dataset mockDataset;
+  @Mock private Table mockTable;
+  @Mock private InsertAllResponse mockInsertAllResponse;
 
   @Before
-  public void setUp() throws IOException {
+  public void setUp()
+      throws IOException,
+          IllegalArgumentException,
+          DescriptorValidationException,
+          InterruptedException {
     MockitoAnnotations.openMocks(this);
+
     accountInfo = AccountInfo.load(TEST_CONFIG_DIR, ACCOUNT_INFO_FILE_NAME);
     bigQueryService = new BigQueryService(accountInfo);
-    bigQueryService.setBigQuery(bigQuery);
+    bigQueryService.setBigQuery(mockBigQuery);
+
+    mockBigQueryWriteClient = mock(BigQueryWriteClient.class);
+    mockWriteStream = mock(WriteStream.class);
+
+    mockedStaticBigQueryWriteClient = mockStatic(BigQueryWriteClient.class);
+    mockedStaticBigQueryWriteClient
+        .when(BigQueryWriteClient::create)
+        .thenReturn(mockBigQueryWriteClient);
+
+    when(mockBigQueryWriteClient.createWriteStream(any(CreateWriteStreamRequest.class)))
+        .thenReturn(mockWriteStream);
+    when(mockWriteStream.getName()).thenReturn(WRITE_STREAM_NAME);
+    when(mockWriteStream.getTableSchema()).thenReturn(TableSchema.newBuilder().build());
+    when(mockWriteStream.getLocation()).thenReturn(TEST_LOCATION);
+
+    JsonStreamWriter.Builder mockJsonStreamWriterBuilder = mock(JsonStreamWriter.Builder.class);
+    mockJsonStreamWriter = mock(JsonStreamWriter.class);
+
+    mockedStaticJsonStreamWriter = mockStatic(JsonStreamWriter.class);
+    mockedStaticJsonStreamWriter
+        .when(
+            () ->
+                JsonStreamWriter.newBuilder(
+                    anyString(), any(TableSchema.class), any(BigQueryWriteClient.class)))
+        .thenReturn(mockJsonStreamWriterBuilder);
+
+    when(mockJsonStreamWriterBuilder.build()).thenReturn(mockJsonStreamWriter);
+    when(mockBigQuery.create(DATASET_INFO)).thenReturn(mockDataset);
+  }
+
+  @After
+  public void tearDown() {
+    mockedStaticBigQueryWriteClient.close();
+    mockedStaticJsonStreamWriter.close();
   }
 
   @Test
   public void datasetExists_datasetExists() {
-    when(bigQuery.getDataset(DATASET_ID)).thenReturn(dataset);
+    when(mockBigQuery.getDataset(DATASET_ID)).thenReturn(mockDataset);
     assertTrue(bigQueryService.datasetExists(TEST_DATASET_NAME));
   }
 
   @Test
   public void datasetExists_datasetDoesNotExist() {
-    when(bigQuery.getDataset(DATASET_ID)).thenReturn(null);
+    when(mockBigQuery.getDataset(DATASET_ID)).thenReturn(null);
     assertFalse(bigQueryService.datasetExists(TEST_DATASET_NAME));
   }
 
   @Test
   public void createDataset() throws IOException {
-    when(bigQuery.create(DATASET_INFO)).thenReturn(dataset);
-    assertEquals(dataset, bigQueryService.createDataset(TEST_DATASET_NAME, TEST_LOCATION));
+    when(mockBigQuery.create(DATASET_INFO)).thenReturn(mockDataset);
+    assertEquals(mockDataset, bigQueryService.createDataset(TEST_DATASET_NAME, TEST_LOCATION));
   }
 
   @Test
@@ -287,13 +354,13 @@ public class BigQueryServiceTest {
 
   @Test
   public void tableExists_tableExists() {
-    when(bigQuery.getTable(TABLE_ID)).thenReturn(table);
+    when(mockBigQuery.getTable(TABLE_ID)).thenReturn(mockTable);
     assertTrue(bigQueryService.tableExists(TEST_DATASET_NAME, TEST_TABLE_NAME));
   }
 
   @Test
   public void tableExists_tableDoesNotExist() {
-    when(bigQuery.getTable(TABLE_ID)).thenReturn(null);
+    when(mockBigQuery.getTable(TABLE_ID)).thenReturn(null);
     assertFalse(bigQueryService.tableExists(TEST_DATASET_NAME, TEST_TABLE_NAME));
   }
 
@@ -313,8 +380,8 @@ public class BigQueryServiceTest {
             .build();
     TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
 
-    when(bigQuery.create(tableInfo)).thenReturn(table);
-    assertEquals(table, bigQueryService.createCssProductsTable(TEST_DATASET_NAME));
+    when(mockBigQuery.create(tableInfo)).thenReturn(mockTable);
+    assertEquals(mockTable, bigQueryService.createCssProductsTable(TEST_DATASET_NAME));
   }
 
   @Test
@@ -364,7 +431,7 @@ public class BigQueryServiceTest {
   }
 
   @Test
-  public void getCssProductAsRowToInsert() {
+  public void testGetCssProductAsMap() {
     Attributes cssProductAttributes = CSS_PRODUCT.getAttributes();
 
     Map<String, Object> testAttributes = new HashMap<String, Object>();
@@ -444,29 +511,90 @@ public class BigQueryServiceTest {
     testRowContent.put("attributes", testAttributes);
     testRowContent.put("css_product_status", testProductStatus);
 
-    RowToInsert rowToInsert = RowToInsert.of(testRowContent);
     assertEquals(
-        rowToInsert.toString(),
-        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_TRANSFER_DATE).toString());
+        testRowContent.toString(),
+        bigQueryService.getCssProductAsMap(CSS_PRODUCT, TEST_TRANSFER_DATE).toString());
   }
 
   @Test
-  public void insertCssProducts() {
-    Iterable<CssProduct> cssProducts = List.of(CSS_PRODUCT);
+  public void testStreamCssProducts_EmptyProductsList()
+      throws ExecutionException,
+          InterruptedException,
+          IOException,
+          IllegalArgumentException,
+          DescriptorValidationException {
+    // Test with empty input
+    List<CssProduct> cssProducts = List.of();
 
-    TableId tableId = TableId.of(TEST_DATASET_NAME, CSS_PRODUCTS_TABLE_NAME);
-    RowToInsert rowToInsert =
-        bigQueryService.getCssProductAsRowToInsert(CSS_PRODUCT, TEST_TRANSFER_DATE);
-    InsertAllRequest insertAllRequest =
-        InsertAllRequest.newBuilder(tableId).addRow(rowToInsert).build();
+    // No errors should be thrown
+    bigQueryService.streamCssProducts(
+        TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE);
+  }
 
-    when(bigQuery.getDataset(DATASET_ID)).thenReturn(dataset);
-    when(bigQuery.getTable(tableId)).thenReturn(table);
-    when(bigQuery.insertAll(insertAllRequest)).thenReturn(insertAllResponse);
+  @Test
+  public void testStreamCssProducts_SingleBatch()
+      throws ExecutionException, InterruptedException, IOException, DescriptorValidationException {
+    List<CssProduct> cssProducts = Arrays.asList(CSS_PRODUCT, CSS_PRODUCT, CSS_PRODUCT);
 
-    assertEquals(
-        insertAllResponse,
-        bigQueryService.insertCssProducts(
-            TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE));
+    // Prepare mock responses
+    SettableApiFuture<AppendRowsResponse> successFuture = SettableApiFuture.create();
+    successFuture.set(AppendRowsResponse.newBuilder().build());
+
+    when(mockJsonStreamWriter.append(any(JSONArray.class), anyLong()))
+        .thenReturn(successFuture); // Return the successful future
+
+    bigQueryService.streamCssProducts(
+        TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE);
+
+    // Verify
+    verify(mockJsonStreamWriter, times(1))
+        .append(any(JSONArray.class), anyLong()); // Ensure append is called once
+  }
+
+  @Test
+  public void testStreamCssProducts_MultiBatch()
+      throws IOException,
+          DescriptorValidationException,
+          IllegalArgumentException,
+          InterruptedException,
+          ExecutionException {
+    // Populate list of CSS products
+    List<CssProduct> cssProducts = new ArrayList<CssProduct>();
+    for (int i = 0; i < 500; i++) {
+      cssProducts.add(CSS_PRODUCT);
+    }
+
+    // Prepare mock responses
+    SettableApiFuture<AppendRowsResponse> successFuture = SettableApiFuture.create();
+    successFuture.set(AppendRowsResponse.newBuilder().build());
+
+    when(mockJsonStreamWriter.append(any(JSONArray.class), anyLong()))
+        .thenReturn(successFuture); // Return the successful future
+
+    bigQueryService.streamCssProducts(
+        TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE);
+
+    // Verify
+    verify(mockJsonStreamWriter, times(5))
+        .append(any(JSONArray.class), anyLong()); // Ensure append is called 5 times
+  }
+
+  @Test(expected = RuntimeException.class)
+  public void testStreamCssProducts_FailedAppend()
+      throws IllegalArgumentException,
+          InterruptedException,
+          ExecutionException,
+          IOException,
+          DescriptorValidationException {
+    List<CssProduct> cssProducts = Arrays.asList(CSS_PRODUCT, CSS_PRODUCT, CSS_PRODUCT);
+
+    SettableApiFuture<AppendRowsResponse> failureFuture = SettableApiFuture.create();
+    failureFuture.setException(new IOException("Failed to append")); // Return failure future
+
+    when(mockJsonStreamWriter.append(any(JSONArray.class), anyLong()))
+        .thenReturn(failureFuture); // Return the failure future
+
+    bigQueryService.streamCssProducts(
+        TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE);
   }
 }

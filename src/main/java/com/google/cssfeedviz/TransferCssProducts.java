@@ -1,14 +1,10 @@
 package com.google.cssfeedviz;
 
-import com.google.cloud.bigquery.BigQueryError;
-import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cssfeedviz.css.ProductsService;
 import com.google.cssfeedviz.gcp.BigQueryService;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.shopping.css.v1.CssProduct;
-import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
 
 public class TransferCssProducts {
   private static final String DEFAULT_CONFIG_DIR = "./config";
@@ -32,17 +28,10 @@ public class TransferCssProducts {
       Iterable<CssProduct> cssProducts = productsService.listCssProducts();
 
       BigQueryService bigQueryService = new BigQueryService(accountInfo);
-      InsertAllResponse insertAllResponse =
-          bigQueryService.insertCssProducts(
-              DATASET_NAME, DATASET_LOCATION, cssProducts, LocalDateTime.now());
-
-      if (insertAllResponse.hasErrors()) System.out.println("Big Query Insert Errors:");
-      for (List<BigQueryError> bigQueryErrors : insertAllResponse.getInsertErrors().values()) {
-        for (BigQueryError bigQueryError : bigQueryErrors) {
-          System.out.println(bigQueryError.toString());
-        }
-      }
-    } catch (IOException e) {
+      bigQueryService.streamCssProducts(
+          DATASET_NAME, DATASET_LOCATION, cssProducts, LocalDateTime.now());
+    } catch (Exception e) {
+      System.err.println(e.getMessage());
       e.printStackTrace();
     }
   }

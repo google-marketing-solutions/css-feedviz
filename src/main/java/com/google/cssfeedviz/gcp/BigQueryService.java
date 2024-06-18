@@ -14,7 +14,10 @@
 
 package com.google.cssfeedviz.gcp;
 
-import com.google.auth.oauth2.GoogleCredentials;
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureCallback;
+import com.google.api.core.ApiFutures;
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryOptions;
 import com.google.cloud.bigquery.Dataset;
@@ -22,9 +25,6 @@ import com.google.cloud.bigquery.DatasetId;
 import com.google.cloud.bigquery.DatasetInfo;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
-import com.google.cloud.bigquery.InsertAllRequest;
-import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
-import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.cloud.bigquery.StandardTableDefinition;
@@ -32,8 +32,19 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
+import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
+import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
+import com.google.cloud.bigquery.storage.v1.CreateWriteStreamRequest;
+import com.google.cloud.bigquery.storage.v1.Exceptions;
+import com.google.cloud.bigquery.storage.v1.Exceptions.StorageException;
+import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
+import com.google.cloud.bigquery.storage.v1.TableName;
+import com.google.cloud.bigquery.storage.v1.WriteStream;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.cssfeedviz.utils.Authenticator;
+import com.google.protobuf.Descriptors.DescriptorValidationException;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.Timestamps;
 import com.google.shopping.css.v1.Attributes;
@@ -48,12 +59,21 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import javax.annotation.concurrent.GuardedBy;
+import org.json.JSONArray;
 
 public class BigQueryService {
   private final String CSS_PRODUCTS_TABLE_NAME = "css_products";
+  private final int INSERT_BATCH_SIZE = 100;
 
   private BigQuery bigQuery;
+  private ServiceAccountCredentials serviceAccountCredentials;
+  private final Object lock = new Object();
+
+  @GuardedBy("lock")
+  private RuntimeException error = null;
 
   public void setBigQuery(BigQuery bigQuery) {
     this.bigQuery = bigQuery;
@@ -122,7 +142,7 @@ public class BigQueryService {
     return itemLevelIssueMap;
   }
 
-  public RowToInsert getCssProductAsRowToInsert(CssProduct cssProduct, LocalDateTime transferDate) {
+  public Map<String, Object> getCssProductAsMap(CssProduct cssProduct, LocalDateTime transferDate) {
     Attributes cssProductAttributes = cssProduct.getAttributes();
 
     List<Map<String, String>> productDetailsList =
@@ -243,7 +263,7 @@ public class BigQueryService {
     rowContent.put("feed_label", cssProduct.getFeedLabel());
     rowContent.put("attributes", attributesMap);
     rowContent.put("css_product_status", cssProductStatusMap);
-    return RowToInsert.of(rowContent);
+    return rowContent;
   }
 
   public Field getCssProductsAttributesField() {
@@ -403,26 +423,98 @@ public class BigQueryService {
         getCssProductsCssProductStatusField());
   }
 
-  public InsertAllResponse insertCssProducts(
+  public void streamCssProducts(
       String datasetName,
       String datasetLocation,
       Iterable<CssProduct> cssProducts,
-      LocalDateTime transferDate) {
+      LocalDateTime transferDate)
+      throws InterruptedException,
+          ExecutionException,
+          IOException,
+          IllegalArgumentException,
+          DescriptorValidationException {
+
     if (!datasetExists(datasetName)) createDataset(datasetName, datasetLocation);
     if (!tableExists(datasetName, CSS_PRODUCTS_TABLE_NAME)) createCssProductsTable(datasetName);
 
-    TableId tableId = TableId.of(datasetName, CSS_PRODUCTS_TABLE_NAME);
-    InsertAllRequest.Builder insertAllRequestBuilder = InsertAllRequest.newBuilder(tableId);
-    for (CssProduct cssProduct : cssProducts) {
-      insertAllRequestBuilder.addRow(getCssProductAsRowToInsert(cssProduct, transferDate));
+    TableId tableId =
+        TableId.of(
+            this.serviceAccountCredentials.getProjectId(), datasetName, CSS_PRODUCTS_TABLE_NAME);
+
+    BigQueryWriteClient writeClient = BigQueryWriteClient.create();
+    WriteStream writeStream = createWriteStream(tableId);
+    JsonStreamWriter streamWriter =
+        JsonStreamWriter.newBuilder(
+                writeStream.getName(), writeStream.getTableSchema(), writeClient)
+            .build();
+    long offset = 0;
+    for (List<CssProduct> batch :
+        Lists.partition((List<CssProduct>) cssProducts, INSERT_BATCH_SIZE)) {
+      List<Map<String, Object>> batchRows =
+          batch.stream().map(cssProduct -> getCssProductAsMap(cssProduct, transferDate)).toList();
+      JSONArray jsonArray = new JSONArray(batchRows);
+      ApiFuture<AppendRowsResponse> future = streamWriter.append(jsonArray, offset);
+      ApiFutures.addCallback(
+          future,
+          new BigQueryService.AppendRowsCompleteCallback(this),
+          MoreExecutors.directExecutor());
+      offset += jsonArray.length();
     }
-    return bigQuery.insertAll(insertAllRequestBuilder.build());
+
+    streamWriter.close();
+    synchronized (this.lock) {
+      if (this.error != null) {
+        throw this.error;
+      }
+    }
+  }
+
+  private WriteStream createWriteStream(TableId tableId) throws IOException {
+    try (BigQueryWriteClient writeClient = BigQueryWriteClient.create()) {
+      WriteStream stream = WriteStream.newBuilder().setType(WriteStream.Type.COMMITTED).build();
+      TableName parentTable =
+          TableName.of(tableId.getProject(), tableId.getDataset(), tableId.getTable());
+      CreateWriteStreamRequest createWriteStreamRequest =
+          CreateWriteStreamRequest.newBuilder()
+              .setParent(parentTable.toString())
+              .setWriteStream(stream)
+              .build();
+      return writeClient.createWriteStream(createWriteStreamRequest);
+    }
   }
 
   public BigQueryService(AccountInfo accountInfo) throws IOException {
-    GoogleCredentials googleCredentials = new Authenticator().authenticate(accountInfo);
+
+    this.serviceAccountCredentials =
+        (ServiceAccountCredentials) new Authenticator().authenticate(accountInfo);
     BigQueryOptions bigQueryOptions =
-        BigQueryOptions.newBuilder().setCredentials(googleCredentials).build();
+        BigQueryOptions.newBuilder().setCredentials(this.serviceAccountCredentials).build();
     this.bigQuery = bigQueryOptions.getService();
+  }
+
+  static class AppendRowsCompleteCallback implements ApiFutureCallback<AppendRowsResponse> {
+    private final BigQueryService parent;
+
+    AppendRowsCompleteCallback(BigQueryService parent) {
+      this.parent = parent;
+    }
+
+    @Override
+    public void onFailure(Throwable throwable) {
+      synchronized (this.parent.lock) {
+        if (this.parent.error == null) {
+          StorageException storageException = Exceptions.toStorageException(throwable);
+          this.parent.error =
+              (storageException != null) ? storageException : new RuntimeException(throwable);
+        }
+      }
+      System.out.format("Error: %s\n", throwable.toString());
+    }
+
+    @Override
+    public void onSuccess(AppendRowsResponse appendRowsResponse) {
+      System.out.format(
+          "Append %d success\n", appendRowsResponse.getAppendResult().getOffset().getValue());
+    }
   }
 }
