@@ -40,7 +40,7 @@ import com.google.cloud.bigquery.storage.v1.Exceptions.StorageException;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.google.cloud.bigquery.storage.v1.TableName;
 import com.google.cloud.bigquery.storage.v1.WriteStream;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.cssfeedviz.utils.Authenticator;
@@ -442,14 +442,13 @@ public class BigQueryService {
             this.serviceAccountCredentials.getProjectId(), datasetName, CSS_PRODUCTS_TABLE_NAME);
 
     BigQueryWriteClient writeClient = BigQueryWriteClient.create();
-    WriteStream writeStream = createWriteStream(tableId);
+    WriteStream writeStream = createWriteStream(writeClient, tableId);
     JsonStreamWriter streamWriter =
         JsonStreamWriter.newBuilder(
                 writeStream.getName(), writeStream.getTableSchema(), writeClient)
             .build();
     long offset = 0;
-    for (List<CssProduct> batch :
-        Lists.partition((List<CssProduct>) cssProducts, INSERT_BATCH_SIZE)) {
+    for (List<CssProduct> batch : Iterables.partition(cssProducts, INSERT_BATCH_SIZE)) {
       List<Map<String, Object>> batchRows =
           batch.stream().map(cssProduct -> getCssProductAsMap(cssProduct, transferDate)).toList();
       JSONArray jsonArray = new JSONArray(batchRows);
@@ -462,6 +461,7 @@ public class BigQueryService {
     }
 
     streamWriter.close();
+    writeClient.close();
     synchronized (this.lock) {
       if (this.error != null) {
         throw this.error;
@@ -469,18 +469,16 @@ public class BigQueryService {
     }
   }
 
-  private WriteStream createWriteStream(TableId tableId) throws IOException {
-    try (BigQueryWriteClient writeClient = BigQueryWriteClient.create()) {
-      WriteStream stream = WriteStream.newBuilder().setType(WriteStream.Type.COMMITTED).build();
-      TableName parentTable =
-          TableName.of(tableId.getProject(), tableId.getDataset(), tableId.getTable());
-      CreateWriteStreamRequest createWriteStreamRequest =
-          CreateWriteStreamRequest.newBuilder()
-              .setParent(parentTable.toString())
-              .setWriteStream(stream)
-              .build();
-      return writeClient.createWriteStream(createWriteStreamRequest);
-    }
+  private WriteStream createWriteStream(BigQueryWriteClient writeClient, TableId tableId) {
+    WriteStream stream = WriteStream.newBuilder().setType(WriteStream.Type.COMMITTED).build();
+    TableName parentTable =
+        TableName.of(tableId.getProject(), tableId.getDataset(), tableId.getTable());
+    CreateWriteStreamRequest createWriteStreamRequest =
+        CreateWriteStreamRequest.newBuilder()
+            .setParent(parentTable.toString())
+            .setWriteStream(stream)
+            .build();
+    return writeClient.createWriteStream(createWriteStreamRequest);
   }
 
   public BigQueryService(AccountInfo accountInfo) throws IOException {
