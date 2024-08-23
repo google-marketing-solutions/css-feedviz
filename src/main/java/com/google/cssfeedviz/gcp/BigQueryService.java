@@ -16,7 +16,6 @@ package com.google.cssfeedviz.gcp;
 
 import com.google.api.core.ApiFuture;
 import com.google.api.core.ApiFutureCallback;
-import com.google.api.core.ApiFutures;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryOptions;
@@ -41,7 +40,6 @@ import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.google.cloud.bigquery.storage.v1.TableName;
 import com.google.cloud.bigquery.storage.v1.WriteStream;
 import com.google.common.collect.Iterables;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.cssfeedviz.utils.AccountInfo;
 import com.google.cssfeedviz.utils.Authenticator;
 import com.google.protobuf.Descriptors.DescriptorValidationException;
@@ -56,10 +54,15 @@ import com.google.shopping.css.v1.ProductWeight;
 import com.google.shopping.type.Price;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import javax.annotation.concurrent.GuardedBy;
 import org.json.JSONArray;
@@ -73,7 +76,7 @@ public class BigQueryService {
   private final Object lock = new Object();
 
   @GuardedBy("lock")
-  private RuntimeException error = null;
+  private Throwable error = null;
 
   public void setBigQuery(BigQuery bigQuery) {
     this.bigQuery = bigQuery;
@@ -447,24 +450,55 @@ public class BigQueryService {
         JsonStreamWriter.newBuilder(
                 writeStream.getName(), writeStream.getTableSchema(), writeClient)
             .build();
+
+    ExecutorService executorService =
+        Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+    List<CompletableFuture<AppendRowsResponse>> futures = new ArrayList<>();
     long offset = 0;
     for (List<CssProduct> batch : Iterables.partition(cssProducts, INSERT_BATCH_SIZE)) {
       List<Map<String, Object>> batchRows =
           batch.stream().map(cssProduct -> getCssProductAsMap(cssProduct, transferDate)).toList();
       JSONArray jsonArray = new JSONArray(batchRows);
-      ApiFuture<AppendRowsResponse> future = streamWriter.append(jsonArray, offset);
-      ApiFutures.addCallback(
-          future,
-          new BigQueryService.AppendRowsCompleteCallback(this),
-          MoreExecutors.directExecutor());
+
+      // The offset is used to track the number of rows that have been written to the stream.
+      // The offset is used to ensure that the rows are written in the correct order.
+      final long currentOffset = offset;
+      CompletableFuture<AppendRowsResponse> future =
+          CompletableFuture.supplyAsync(
+              () -> {
+                try {
+                  ApiFuture<AppendRowsResponse> apiFuture =
+                      streamWriter.append(jsonArray, currentOffset);
+                  return apiFuture.get();
+                } catch (DescriptorValidationException
+                    | InterruptedException
+                    | ExecutionException
+                    | IOException e) {
+                  throw new CompletionException(e);
+                }
+              },
+              executorService);
+      futures.add(future);
       offset += jsonArray.length();
     }
 
-    streamWriter.close();
-    writeClient.close();
+    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+        .thenRun(streamWriter::close)
+        .thenRun(writeClient::close)
+        .exceptionally(
+            ex -> {
+              synchronized (this.lock) {
+                this.error = ex;
+              }
+              return null;
+            })
+        .join();
+
+    executorService.shutdown();
     synchronized (this.lock) {
       if (this.error != null) {
-        throw this.error;
+        throw new RuntimeException(this.error);
       }
     }
   }
