@@ -32,6 +32,38 @@ public class AccountInfoTest {
   private final BigInteger TEST_MERCHANT_ID = BigInteger.valueOf(789);
 
   @Test
+  public void testCreate() {
+    AccountInfo accountInfo = AccountInfo.create(TEST_MERCHANT_ID, TEST_DOMAIN_ID, TEST_GROUP_ID);
+    assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
+    assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
+    assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
+  }
+
+  @Test
+  public void testCreate_withOnlyMerchantId() {
+    AccountInfo accountInfo = AccountInfo.create(TEST_MERCHANT_ID, null, null);
+    assertEquals(accountInfo.getGroupId(), null);
+    assertEquals(accountInfo.getDomainId(), null);
+    assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
+  }
+
+  @Test
+  public void testCreate_withOnlyDomainId() {
+    AccountInfo accountInfo = AccountInfo.create(null, TEST_DOMAIN_ID, null);
+    assertEquals(accountInfo.getGroupId(), null);
+    assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
+    assertEquals(accountInfo.getMerchantId(), null);
+  }
+
+  @Test
+  public void testCreate_withOnlyGroupId() {
+    AccountInfo accountInfo = AccountInfo.create(null, null, TEST_GROUP_ID);
+    assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
+    assertEquals(accountInfo.getDomainId(), null);
+    assertEquals(accountInfo.getMerchantId(), null);
+  }
+
+  @Test
   public void testLoad() throws IOException {
     AccountInfo accountInfo = AccountInfo.load(TEST_CONFIG_DIR, FILE_NAME);
     assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);

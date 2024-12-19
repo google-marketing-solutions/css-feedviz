@@ -40,12 +40,22 @@ public class AccountInfo {
 
   private File path;
 
+  private AccountInfo() {}
+
   public File getPath() {
     return path;
   }
 
   public void setPath(File path) {
     this.path = path;
+  }
+
+  public static AccountInfo create(BigInteger merchantId, BigInteger domainId, BigInteger groupId) {
+    AccountInfo config = new AccountInfo();
+    config.setMerchantId(merchantId);
+    config.setDomainId(domainId);
+    config.setGroupId(groupId);
+    return config;
   }
 
   public static AccountInfo load() throws IOException {
