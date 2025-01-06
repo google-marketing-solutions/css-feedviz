@@ -47,12 +47,14 @@ Once you’ve obtained the JSON private key file, rename it as `service-account.
 $(HOME)/css-feedviz/config
 ```
 
-In order to provide CSS FeedViz with the relevant CSS Center account information, copy the test account-info.json file from $(HOME)/css-feedviz/config/test to $(HOME)/css-feedviz/config and modify its contents as needed. The file contains a JSON object with the following fields:
+In order to provide CSS FeedViz with the relevant CSS Center account information, copy the test account-info.json file from `$(HOME)/css-feedviz/config/test` to `$(HOME)/css-feedviz/config` and modify its contents as needed. The file contains a JSON object with the following fields:
 
 | Field name | Type | Description |
 | :--- | :--- | :--- |
 | groupId | number | The CSS Group ID. |
 | domainId | number | The CSS Domain ID to retrieve products for. |
+
+CSS FeedViz may also be provided with the CSS Center account information via [Java System Properties](#transfercssproducts-system-properties). In the event that both System Properties and an account information JSON file are provided, the System Properties take precedence.
 
 ### Transfer Execution
 
@@ -80,14 +82,16 @@ Once properly configured, you should have a dashboard with two populated pages, 
 
 ### TransferCssProducts System Properties
 
-The TransferCssProducts service supports the following Java system properties to allow for greater customisation of functionality.
+The TransferCssProducts service supports the following Java System Properties to allow for greater customisation of functionality.
 
 | System property | Default value | Description |
 | :--- | :--- | :--- |
-| feedviz.config.dir | `"./config"` | Path to directory containing configuration files |
+| feedviz.account.info.domain.id | `null` | The CSS Domain ID to retrieve products for. |
+| feedviz.account.info.group.id | `null` | The CSS Group ID. |
 | feedviz.account.info.file | `"account-info.json"` | Name of file containing CSS Center account details. |
+| feedviz.config.dir | `"./config"` | Path to directory containing configuration files |
+| feedviz.dataset.location | `"EU"` | Location of Google Cloud servers where data will be stored/processed. |
 | feedviz.dataset.name | `"css_feedviz"` | Name of the dataset that will be used/created in BigQuery. |
-| feedviz.dataset.location | `"EU"` | Location of Google Cloud servers where data will be stored/processed.
 
 ### CSS Products Schema
 

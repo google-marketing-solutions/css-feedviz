@@ -32,32 +32,33 @@ public class AccountInfoTest {
   private final BigInteger TEST_MERCHANT_ID = BigInteger.valueOf(789);
 
   @Test
-  public void testCreate() {
-    AccountInfo accountInfo = AccountInfo.create(TEST_MERCHANT_ID, TEST_DOMAIN_ID, TEST_GROUP_ID);
+  public void testCreate() throws IOException {
+    AccountInfo accountInfo =
+        AccountInfo.create(TEST_CONFIG_DIR, TEST_MERCHANT_ID, TEST_DOMAIN_ID, TEST_GROUP_ID);
     assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
     assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
     assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
   }
 
   @Test
-  public void testCreate_withOnlyMerchantId() {
-    AccountInfo accountInfo = AccountInfo.create(TEST_MERCHANT_ID, null, null);
+  public void testCreate_withOnlyMerchantId() throws IOException {
+    AccountInfo accountInfo = AccountInfo.create(TEST_CONFIG_DIR, TEST_MERCHANT_ID, null, null);
     assertEquals(accountInfo.getGroupId(), null);
     assertEquals(accountInfo.getDomainId(), null);
     assertEquals(accountInfo.getMerchantId(), TEST_MERCHANT_ID);
   }
 
   @Test
-  public void testCreate_withOnlyDomainId() {
-    AccountInfo accountInfo = AccountInfo.create(null, TEST_DOMAIN_ID, null);
+  public void testCreate_withOnlyDomainId() throws IOException {
+    AccountInfo accountInfo = AccountInfo.create(TEST_CONFIG_DIR, null, TEST_DOMAIN_ID, null);
     assertEquals(accountInfo.getGroupId(), null);
     assertEquals(accountInfo.getDomainId(), TEST_DOMAIN_ID);
     assertEquals(accountInfo.getMerchantId(), null);
   }
 
   @Test
-  public void testCreate_withOnlyGroupId() {
-    AccountInfo accountInfo = AccountInfo.create(null, null, TEST_GROUP_ID);
+  public void testCreate_withOnlyGroupId() throws IOException {
+    AccountInfo accountInfo = AccountInfo.create(TEST_CONFIG_DIR, null, null, TEST_GROUP_ID);
     assertEquals(accountInfo.getGroupId(), TEST_GROUP_ID);
     assertEquals(accountInfo.getDomainId(), null);
     assertEquals(accountInfo.getMerchantId(), null);

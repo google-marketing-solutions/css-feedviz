@@ -36,7 +36,7 @@ public class TransferCssProducts {
     BigInteger merchantId =
         (ACCOUNT_INFO_MERCHANT_ID != null) ? new BigInteger(ACCOUNT_INFO_MERCHANT_ID) : null;
     if (domainId != null || groupId != null || merchantId != null) {
-      return AccountInfo.create(merchantId, domainId, groupId);
+      return AccountInfo.create(CONFIG_DIR, merchantId, domainId, groupId);
     } else {
       return AccountInfo.load(CONFIG_DIR, ACCOUNT_INFO_FILE);
     }

@@ -46,15 +46,29 @@ public class AccountInfo {
     return path;
   }
 
-  public void setPath(File path) {
+  private void setPath(File path) {
     this.path = path;
   }
 
-  public static AccountInfo create(BigInteger merchantId, BigInteger domainId, BigInteger groupId) {
+  private static File getConfigPath(String configDir) throws IOException {
+    File configPath = new File(configDir);
+    if (!configPath.exists()) {
+      throw new FileNotFoundException(
+          "CSS FeedViz configuration directory '"
+              + configPath.getCanonicalPath()
+              + "' does not exist");
+    }
+    return configPath;
+  }
+
+  public static AccountInfo create(
+      String configDir, BigInteger merchantId, BigInteger domainId, BigInteger groupId)
+      throws IOException {
     AccountInfo config = new AccountInfo();
     config.setMerchantId(merchantId);
     config.setDomainId(domainId);
     config.setGroupId(groupId);
+    config.setPath(getConfigPath(configDir));
     return config;
   }
 
@@ -63,11 +77,7 @@ public class AccountInfo {
   }
 
   public static AccountInfo load(String configDir, String fileName) throws IOException {
-    File configPath = new File(configDir);
-    if (!configPath.exists()) {
-      throw new FileNotFoundException(
-          "CSS API configuration directory '" + configPath.getCanonicalPath() + "' does not exist");
-    }
+    File configPath = getConfigPath(configDir);
     File configFile = new File(configPath, fileName);
     try (InputStream inputStream = new FileInputStream(configFile)) {
       AccountInfo config = new AccountInfo();
