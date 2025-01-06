@@ -57,7 +57,7 @@ public class ProductsServiceTest {
     ListCssProductsRequest listCssProductsRequest =
         ListCssProductsRequest.newBuilder().setParent(parent).build();
 
-    ProductsService productsService = new ProductsService(accountInfo);
+    ProductsService productsService = ProductsService.create(accountInfo);
     productsService.setCssProductsServiceClient(cssProductsServiceClient);
 
     when(cssProductsServiceClient.listCssProducts(listCssProductsRequest))

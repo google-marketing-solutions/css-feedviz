@@ -31,8 +31,31 @@ public class ProductsService {
   private AccountInfo accountInfo;
   private CssProductsServiceClient cssProductsServiceClient;
 
+  private ProductsService() {}
+
   private String getParent() {
-    return String.format("accounts/%s", this.accountInfo.getDomainId().toString());
+    return String.format("accounts/%d", this.accountInfo.getDomainId());
+  }
+
+  private void setAccountInfo(AccountInfo accountInfo) {
+    this.accountInfo = accountInfo;
+  }
+
+  public static ProductsService create(AccountInfo accountInfo) throws IOException {
+    ProductsService productsService = new ProductsService();
+    productsService.setAccountInfo(accountInfo);
+
+    GoogleCredentials credential = new Authenticator().authenticate(accountInfo);
+
+    CssProductsServiceSettings cssProductsServiceSettings =
+        CssProductsServiceSettings.newBuilder()
+            .setCredentialsProvider(FixedCredentialsProvider.create(credential))
+            .build();
+    CssProductsServiceClient cssProductsServiceClient =
+        CssProductsServiceClient.create(cssProductsServiceSettings);
+    productsService.setCssProductsServiceClient(cssProductsServiceClient);
+
+    return productsService;
   }
 
   public void setCssProductsServiceClient(CssProductsServiceClient cssProductsServiceClient) {
@@ -47,18 +70,5 @@ public class ProductsService {
 
     ListCssProductsPagedResponse response = this.cssProductsServiceClient.listCssProducts(request);
     return response.iterateAll();
-  }
-
-  public ProductsService(AccountInfo accountInfo) throws IOException {
-    this.accountInfo = accountInfo;
-
-    GoogleCredentials credential = new Authenticator().authenticate(accountInfo);
-
-    CssProductsServiceSettings cssProductsServiceSettings =
-        CssProductsServiceSettings.newBuilder()
-            .setCredentialsProvider(FixedCredentialsProvider.create(credential))
-            .build();
-
-    this.cssProductsServiceClient = CssProductsServiceClient.create(cssProductsServiceSettings);
   }
 }
