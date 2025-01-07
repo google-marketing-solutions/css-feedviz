@@ -2,6 +2,8 @@
 
 ## Updates
 
+* [January 2025]: Added ability to specify CSS Center account information via [Java System Properties](#transfercssproducts-system-properties) when executing the CSS Products Transfer.
+
 * [August 2024]: Introduced multi-threading to process the streaming of CSS Products from the [Comparison Shopping Service API](https://developers.google.com/comparison-shopping-services/api/overview) to [BigQuery](https://cloud.google.com/bigquery).
 
 * [June 2024]: Modified the codebase to stream CSS Products into BigQuery instead of using the [insertAll method](https://cloud.google.com/java/docs/reference/google-cloud-bigquery/latest/com.google.cloud.bigquery.BigQuery#com_google_cloud_bigquery_BigQuery_insertAll_com_google_cloud_bigquery_InsertAllRequest_) due to hitting payload size issues.
