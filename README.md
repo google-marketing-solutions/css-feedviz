@@ -2,7 +2,7 @@
 
 ## Updates
 
-* [January 2025]: Added ability to specify CSS Center account information via [Java System Properties](#transfercssproducts-system-properties) when executing the CSS Products Transfer.
+* [January 2025]: Updated [TransferCSSProducts Java System Properties](#transfercssproducts-system-properties) support to include options for CSS Center account information and BigQuery insertion batch size.
 
 * [August 2024]: Introduced multi-threading to process the streaming of CSS Products from the [Comparison Shopping Service API](https://developers.google.com/comparison-shopping-services/api/overview) to [BigQuery](https://cloud.google.com/bigquery).
 
@@ -94,6 +94,7 @@ The TransferCssProducts service supports the following Java System Properties to
 | feedviz.config.dir | `"./config"` | Path to directory containing configuration files |
 | feedviz.dataset.location | `"EU"` | Location of Google Cloud servers where data will be stored/processed. |
 | feedviz.dataset.name | `"css_feedviz"` | Name of the dataset that will be used/created in BigQuery. |
+| feedviz.insert.batch.size | `"100"` | The batch size when inserting products into BigQuery. |
 
 ### CSS Products Schema
 

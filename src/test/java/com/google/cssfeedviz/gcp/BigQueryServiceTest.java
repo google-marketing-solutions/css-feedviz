@@ -85,6 +85,7 @@ public class BigQueryServiceTest {
       String.format(
           "projects/google.com:test-project/datasets/%1$s/tables/%2$s/streams/TEST_STREAM",
           TEST_DATASET_NAME, TEST_TABLE_NAME);
+  private final String TEST_INSERT_BATCH_SIZE = "100";
   private final LocalDateTime TEST_TRANSFER_DATE = LocalDateTime.now();
   private final CssProduct CSS_PRODUCT = CssProduct.newBuilder().setName(PRODUCT_NAME).build();
   private final DatasetId DATASET_ID = DatasetId.of(TEST_DATASET_NAME);
@@ -532,6 +533,17 @@ public class BigQueryServiceTest {
   }
 
   @Test
+  public void testStreamCssProducts_EmptyProductsList_WithSystemPropertiesSet()
+      throws IllegalArgumentException,
+          ExecutionException,
+          InterruptedException,
+          IOException,
+          DescriptorValidationException {
+    System.setProperty("feedviz.insert.batch.size", TEST_INSERT_BATCH_SIZE);
+    testStreamCssProducts_EmptyProductsList();
+  }
+
+  @Test
   public void testStreamCssProducts_SingleBatch()
       throws ExecutionException, InterruptedException, IOException, DescriptorValidationException {
     List<CssProduct> cssProducts = Arrays.asList(CSS_PRODUCT, CSS_PRODUCT, CSS_PRODUCT);
@@ -549,6 +561,13 @@ public class BigQueryServiceTest {
     // Verify
     verify(mockJsonStreamWriter, times(1))
         .append(any(JSONArray.class), anyLong()); // Ensure append is called once
+  }
+
+  @Test
+  public void testStreamCssProducts_SingleBatch_WithSystemPropertiesSet()
+      throws ExecutionException, InterruptedException, IOException, DescriptorValidationException {
+    System.setProperty("feedviz.insert.batch.size", TEST_INSERT_BATCH_SIZE);
+    testStreamCssProducts_SingleBatch();
   }
 
   @Test
@@ -579,6 +598,17 @@ public class BigQueryServiceTest {
         .append(any(JSONArray.class), anyLong()); // Ensure append is called 5 times
   }
 
+  @Test
+  public void testStreamCssProducts_MultiBatch_WithSystemPropertiesSet()
+      throws IOException,
+          DescriptorValidationException,
+          IllegalArgumentException,
+          InterruptedException,
+          ExecutionException {
+    System.setProperty("feedviz.insert.batch.size", TEST_INSERT_BATCH_SIZE);
+    testStreamCssProducts_MultiBatch();
+  }
+
   @Test(expected = RuntimeException.class)
   public void testStreamCssProducts_FailedAppend()
       throws IllegalArgumentException,
@@ -596,5 +626,16 @@ public class BigQueryServiceTest {
 
     bigQueryService.streamCssProducts(
         TEST_DATASET_NAME, TEST_LOCATION, cssProducts, TEST_TRANSFER_DATE);
+  }
+
+  @Test(expected = RuntimeException.class)
+  public void testStreamCssProducts_FailedAppend_WithSystemPropertiesSet()
+      throws IllegalArgumentException,
+          InterruptedException,
+          ExecutionException,
+          IOException,
+          DescriptorValidationException {
+    System.setProperty("feedviz.insert.batch.size", TEST_INSERT_BATCH_SIZE);
+    testStreamCssProducts_FailedAppend();
   }
 }

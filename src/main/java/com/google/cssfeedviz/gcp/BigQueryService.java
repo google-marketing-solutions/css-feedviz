@@ -69,7 +69,9 @@ import org.json.JSONArray;
 
 public class BigQueryService {
   private final String CSS_PRODUCTS_TABLE_NAME = "css_products";
-  private final int INSERT_BATCH_SIZE = 100;
+  private final String DEFAULT_INSERT_BATCH_SIZE = "100";
+  private final int INSERT_BATCH_SIZE =
+      Integer.parseInt(System.getProperty("feedviz.insert.batch.size", DEFAULT_INSERT_BATCH_SIZE));
 
   private BigQuery bigQuery;
   private ServiceAccountCredentials serviceAccountCredentials;
